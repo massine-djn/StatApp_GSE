@@ -59,13 +59,20 @@ def parties_stochastiques(N, a, b, sigma, eta, W1, W2):
 
 ############ Partie déterministe
 
+
+# Taux forward par la méthode NSS
 def forward_0t(t, parametres):
+
+    if np.isscalar(t):
+        if t == 0.0: # taux spot initial ????????????????????????????????????????????????????????
+            return 0.04  # MIS AU PIF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     alpha1 = (1-np.exp(-t/parametres[4])) / (t/parametres[4])
     alpha2 = alpha1 - np.exp(-t/parametres[4])
     alpha3 = (1-np.exp(-t/parametres[5])) / (t/parametres[5]) - np.exp(-t/parametres[5])
 
     return parametres[0] + parametres[1] * alpha1 + parametres[2] * alpha2 + parametres[3] *alpha3
+
 
 
 
@@ -95,3 +102,67 @@ def partie_deterministe(t, sigma, eta, a, b, parametres_NSS):
 
 
 ########################################################################## Princing zero-coupon
+
+
+
+def index(maturites, t):
+
+    return np.searchsorted(maturites, t)
+
+
+def V(t, T, sigma, eta, a, b, rho):
+
+    variance1 = (sigma**2 / a**2) * (T - t + (2 / a) * np.exp(-a * (T - t)) - (1 / (2 * a)) * np.exp(-2 * a * (T - t)) - (3 / (2 * a)))
+    variance2 = (eta**2 / b**2) * (T - t + (2 / b) * np.exp(-b * (T - t)) - (1 / (2 * b)) * np.exp(-2 * b * (T - t)) - (3 / (2 * b)))
+    covariance = ((2 * rho * sigma * eta) / (a * b)) * (T - t + (1 - np.exp(-a * (T - t))) / a + (1 - np.exp(-b * (T - t))) / b - (np.exp(-(a + b) * (T - t)) - 1) / (a + b))
+    
+    return variance1 + variance2 + covariance
+
+
+                                
+def B(t, T, z):
+    return (1 - np.exp(-z * (T - t))) / z
+
+
+
+def P_0T(T, parametres, n=100):
+    '''
+    Calcul du prix zéro-coupon de maturité T, à l'instant t = 0 
+
+    n = subdivision pour l'intégrale
+    '''
+    dt = T / n
+    integrale = 0.0
+
+    for i in range(n):
+        t_i = i * dt
+        t_i1 = (i + 1) * dt
+        integrale += (forward_0t(t_i, parametres) + forward_0t(t_i1, parametres)) * dt / 2
+        
+    return np.exp(-integrale)
+
+
+
+def A(t, T, sigma, eta, a, b, rho, parametres_NSS):
+
+    V_tT = V(t, T, sigma, eta, a, b, rho)
+    V_0T = V(0, T, sigma, eta, a, b, rho)
+    V_0t = V(0, t, sigma, eta, a, b, rho)
+
+    P_OT = P_0T(T, parametres_NSS)
+    P_Ot = P_0T(t, parametres_NSS)
+
+    return (P_OT / P_Ot) * np.exp(0.5 * (V_tT - V_0T + V_0t))
+
+
+
+
+def prix_zero_coupon(t, T, a, b, sigma, eta, rho, x, y, parametres_NSS):
+
+    A_tT = A(t, T, sigma, eta, a, b, rho, parametres_NSS)
+    B_a = B(t, T, a)
+    B_b = B(t, T, b)
+
+    return A_tT * np.exp(-B_a * x - B_b * y)       
+
+
